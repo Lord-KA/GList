@@ -6,7 +6,7 @@
 
 #include "gutils.h"
 
-typedef int GOBJPOOL_TYPE;  //TODO remove
+// typedef int GOBJPOOL_TYPE;  //TODO remove
 
 static const size_t GOBJPOOL_START_CAPACITY = 2;
 static const size_t GOBJPOOL_CAPACITY_EXPND_FACTOR = 2;
@@ -96,9 +96,15 @@ gObjPool_status gObjPool_refit(gObjPool *pool)
     }                                                              
     if (pool->last_free != -1)
         return gObjPool_status_OK;
+
+    if (pool->capacity == -1) {
+        fprintf(pool->logStream, "ERROR: bad capacity (was dtor used?)\n");
+        return gObjPool_status_BadCapacity;
+    }
+
     
     size_t newCapacity = pool->capacity * GOBJPOOL_CAPACITY_EXPND_FACTOR;
-    gObjPool_Node *newData = (gObjPool_Node*)realloc(pool->data, newCapacity);
+    gObjPool_Node *newData = (gObjPool_Node*)realloc(pool->data, newCapacity * sizeof(gObjPool_Node));
 
     if (newData == NULL) {
         fprintf(pool->logStream, "ERROR: Failed to reallocate memory!\n");
@@ -175,9 +181,13 @@ gObjPool_status gObjPool_dumpFree(gObjPool *pool, FILE *newLogStream)
     if (gPtrValid(pool->logStream) && newLogStream == NULL)
         out = pool->logStream;
 
-    for (size_t id = pool->last_free; id != -1; id = pool->data[id].next)
-        fprintf(out, "(%llu)->", id);
-    fprintf(out, "\n");
+    if (pool->last_free == -1)
+        fprintf(out, "Empty\n");
+    else {
+        for (size_t id = pool->last_free; id != -1; id = pool->data[id].next)
+            fprintf(out, "(%li)->", id);
+        fprintf(out, "\n");
+    }
 
     return gObjPool_status_OK;
 }
