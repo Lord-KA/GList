@@ -17,7 +17,8 @@ struct gObjPool_Node
     GOBJPOOL_TYPE val;
 } typedef gObjPool_Node;
 
-enum gObjPool_status {
+enum gObjPool_status 
+{
     gObjPool_status_OK,
     gObjPool_status_AllocErr,
     gObjPool_status_BadCapacity,
@@ -150,7 +151,7 @@ gObjPool_status gObjPool_free(gObjPool *pool, size_t id)
     return gObjPool_status_OK;
 }
 
-gObjPool_status gObjPool_get(gObjPool *pool, size_t id, GOBJPOOL_TYPE **returnPtr)
+gObjPool_status gObjPool_get(const gObjPool *pool, const size_t id, GOBJPOOL_TYPE **returnPtr)
 {
     if (!gPtrValid(pool)) {                                          
         fprintf(stderr, "ERROR: bad structure ptr provided to get!\n");
@@ -158,7 +159,7 @@ gObjPool_status gObjPool_get(gObjPool *pool, size_t id, GOBJPOOL_TYPE **returnPt
     }                                                                
     
     if (id > pool->capacity) {
-        fprintf(pool->logStream, "ERROR: bad structure ptr provided to get!\n");
+        fprintf(pool->logStream, "ERROR: bad id provided to get!\n");
         return  gObjPool_status_BadId;
     }
 
@@ -181,6 +182,7 @@ gObjPool_status gObjPool_dumpFree(gObjPool *pool, FILE *newLogStream)
     if (gPtrValid(pool->logStream) && newLogStream == NULL)
         out = pool->logStream;
 
+    fprintf(out, "Object Pool dump:\ncapacity = %lu\nlast_free = %lu\ndata:\n", pool->capacity, pool->last_free);
     if (pool->last_free == -1)
         fprintf(out, "Empty\n");
     else {

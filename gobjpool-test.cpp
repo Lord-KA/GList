@@ -13,8 +13,16 @@ int main()
     size_t id;
     gObjPool_alloc(&pool, &id);
     printf("%d\n", id);
+
     gObjPool_alloc(&pool, &id);
     printf("%d\n", id);
+
+    int *ptr = NULL;
+    gObjPool_get(&pool, 4, &ptr);
+    printf("ptr = %p\n", ptr);
+    gObjPool_dumpFree(&pool, NULL);
+
+
     gObjPool_alloc(&pool, &id);
     printf("%d\n", id);
     gObjPool_alloc(&pool, &id);
