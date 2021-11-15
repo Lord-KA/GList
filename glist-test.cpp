@@ -37,6 +37,10 @@ int main()
     gList_popByPos(&list, 2, &val);
     gList_dump(&list);
 
+    FILE *out = fopen("dump.gv", "w");
+    gList_dumpGraphViz(&list, out);
+    fclose(out);
+
 finish:
     gObjPool_dumpFree(&list.pool, list.logStream);
     gList_dtor(&list);

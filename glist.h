@@ -285,4 +285,30 @@ gList_status gList_dump(const gList *list)
     return gList_status_OK;
 }
 
+gList_status gList_dumpGraphViz(const gList *list, FILE *fout)
+{
+    ASSERT_LOG(gPtrValid(list), gList_status_BadStructPtr, stderr);
+
+    gList_Node *node = NULL;
+    gList_status status = gList_status_OK;
+    fprintf(fout, "digraph dilist {\n\tnode [shape=record]\n");
+    
+    status = (gList_status)gObjPool_get(&list->pool, list->zero, &node);
+    fprintf(fout, "\tnode%lu [label=\"Node %lu | {data | " GLIST_PRINTF_CODE "}\"]\n", node->id, node->id, node->data);
+    fprintf(fout, "\tnode%lu -> node%lu\n", node->id, node->next);
+    fprintf(fout, "\tnode%lu -> node%lu\n", node->next, node->id);
+    ASSERT_LOG(status == gList_status_OK, status, list->logStream);
+    do {
+        status = gList_getNextNode(list, node->id, &node);
+        ASSERT_LOG(status == gList_status_OK, status, list->logStream);
+
+        fprintf(fout, "\tnode%lu [label=\"Node %lu | {data | " GLIST_PRINTF_CODE "}\"]\n", node->id, node->id, node->data);
+        fprintf(fout, "\tnode%lu -> node%lu\n", node->id, node->next);
+        fprintf(fout, "\tnode%lu -> node%lu\n", node->next, node->id);
+    } while (node->id != list->zero);
+    
+    fprintf(fout, "}\n");
+    return gList_status_OK;
+}
+
 #endif /* GLIST_H */
