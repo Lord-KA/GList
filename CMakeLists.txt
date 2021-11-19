@@ -33,13 +33,23 @@ endif()
 FetchContent_Declare(
   gutils
   GIT_REPOSITORY https://github.com/lord-ka/gutils.git
-  GIT_TAG        release-1.0.1
+  GIT_TAG        release-1.0.2
 )
 
 FetchContent_GetProperties(gutils)
 if(NOT gutils_POPULATED)
   FetchContent_Populate(gutils)
   include_directories(${gutils_SOURCE_DIR})
+endif()
+
+FetchContent_Declare(
+  gobjpool
+  GIT_REPOSITORY https://github.com/Lord-KA/gObjPool.git
+  GIT_TAG        release-1.0.0
+)
+if(NOT gobjpool_POPULATED)
+  FetchContent_Populate(gobjpool)
+  include_directories(${gobjpool_SOURCE_DIR})
 endif()
 
 # include_directories()
@@ -52,7 +62,6 @@ set_target_properties(gmock_main PROPERTIES FOLDER extern)
 enable_testing()
 
 add_executable(glist-test glist.h glist-test.cpp)
-add_executable(gobjPool gobjpool.h gobjpool-test.cpp)
 
 target_link_libraries(
     gtest_main

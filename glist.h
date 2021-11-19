@@ -58,7 +58,7 @@ static const char gList_statusMsg[gList_status_Cnt][MAX_MSG_LEN] = {
 #define CHECK_POOL_STATUS(status) ({        \
     if ((status) != gObjPool_status_OK)      \
         return (gList_status)(status);        \
-})              //TODO
+})
 
 #ifndef NDEBUG
 #define ASSERT_LOG(expr, errCode, logStream) ({                                   \
