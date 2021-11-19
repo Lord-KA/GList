@@ -11,34 +11,39 @@ int main()
 
     gList_ctor(&list, NULL);
 
-    gList_dump(&list);
-    gObjPool_dumpFree(&list.pool, list.logStream);
-
-    gList_insertByPos(&list, 0, 12);
+    gList_insertByPos(&list, 0, 200);
     fprintf(stderr, "zero = %lu\n", list.zero);
-    gList_dump(&list);
     
-    gList_insertByPos(&list, 0, 17);
-    gList_dump(&list);
+    gList_insertByPos(&list, 0, 100);
     // goto finish;
 
-    gList_insertByPos(&list, 2, 179);
-    gList_dump(&list);
-
+    //gList_insertByPos(&list, 2, 700);
     
-    gList_insertByPos(&list, 2, 1990);
+    gList_insertByPos(&list, 2, 600);
+    
+    gList_insertByPos(&list, 2, 500);
+    gList_insertByPos(&list, 2, 400);
+    gList_insertByPos(&list, 2, 300);
     gList_dump(&list);
 
+    FILE *out = fopen("dumpBefore.gv", "w");
+    gList_dumpPoolGraphViz(&list, out);
+    fclose(out);
 
+
+    gList_posSort(&list);
+    gList_dump(&list);
+    /*
     int val = 0;
     gList_popByPos(&list, 2, &val);
     gList_dump(&list);
 
     gList_popByPos(&list, 2, &val);
     gList_dump(&list);
+    */
 
-    FILE *out = fopen("dump.gv", "w");
-    gList_dumpGraphViz(&list, out);
+    out = fopen("dumpAfter.gv", "w");
+    gList_dumpPoolGraphViz(&list, out);
     fclose(out);
 
 finish:

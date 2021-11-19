@@ -2,6 +2,7 @@
 #define GLIST_H
 
 #include "stdio.h"
+#include "stdlib.h"
 
 typedef int GLIST_TYPE;              //TODO remove it
 #define GLIST_PRINTF_CODE "%d"
@@ -39,6 +40,7 @@ enum gList_status
     gList_status_BadId,
     gList_status_BadPos,
     gList_status_BadNodePtr,
+    gList_status_BadDumpOutPtr,
     gList_status_Cnt,
 };
 
@@ -50,6 +52,7 @@ static const char gList_statusMsg[gList_status_Cnt][MAX_MSG_LEN] = {
     "Bad id provided",
     "Bad position requested",
     "Bad node pointer provided",
+    "Bad FILE pointer provided to graphViz dump",
 };
 
 #define CHECK_POOL_STATUS(status) ({        \
@@ -110,6 +113,65 @@ gList_status gList_dtor(gList *list)
         node->prev = -1;
     }
     gObjPool_dtor(&list->pool);
+    return gList_status_OK;
+}
+
+gList_status gList_dump(const gList *list);
+/*
+int gList_NodeComp(const void *one, const void *other) 
+{
+    if (((gObjPool_Node*)one)->val.pos < ((gObjPool_Node*)other)->val.pos)
+        return -1;
+    if (((gObjPool_Node*)one)->val.pos > ((gObjPool_Node*)other)->val.pos)
+        return 1;
+    return 0;
+}
+*/
+
+gList_status gList_posSort(gList *list)
+{
+    ASSERT_LOG(gPtrValid(list), gList_status_BadStructPtr, stderr);
+
+    gList_Node *node    = NULL;
+    gList_Node *newNode = NULL;
+    size_t newId = 0;
+    gObjPool newPool;
+    gObjPool_ctor(&newPool, list->pool.capacity, list->logStream);
+    size_t i = 0;
+    gList_status status = gList_status_OK;
+
+    status = (gList_status)gObjPool_get(&list->pool, list->zero, &node);
+    ASSERT_LOG(status == gList_status_OK, status, list->logStream);
+    do {
+        status =(gList_status)gObjPool_alloc(&newPool, &newId);
+        ASSERT_LOG(status == gList_status_OK, status, list->logStream);
+
+        status =(gList_status)gObjPool_get(&newPool, newId, &newNode);
+        ASSERT_LOG(status == gList_status_OK, status, list->logStream);
+
+        newNode->id = i;
+        newNode->next = i + 1;
+        newNode->prev = i - 1;
+        newNode->data = node->data;
+        ++i;
+        
+        status =(gList_status)gObjPool_get(&list->pool, node->next, &node);
+        ASSERT_LOG(status == gList_status_OK, status, list->logStream);
+    } while (node->id != list->zero);
+
+    gList_Node *zeroNode = NULL;
+    
+    status =(gList_status)gObjPool_get(&newPool, 0, &zeroNode);
+    ASSERT_LOG(status == gList_status_OK, status, list->logStream);
+    
+    newNode->next = 0;
+    zeroNode->prev = newNode->id;
+
+    gObjPool_dtor(&list->pool);
+    list->pool = newPool;
+
+    gList_dump(list);
+
     return gList_status_OK;
 }
 
@@ -285,9 +347,36 @@ gList_status gList_dump(const gList *list)
     return gList_status_OK;
 }
 
+gList_status gList_dumpPoolGraphViz(const gList *list, FILE *fout)
+{
+    ASSERT_LOG(gPtrValid(list), gList_status_BadStructPtr,  stderr);
+    ASSERT_LOG(gPtrValid(fout), gList_status_BadDumpOutPtr, stderr);
+    
+    fprintf(fout, "digraph dilist {\n\tnode [shape=record]\n\tsubgraph cluster {\n");
+    
+    for (size_t i = 0; i < list->pool.capacity; ++i) {
+        gList_Node *node = &list->pool.data[i].val;
+        fprintf(fout, "\t\tnode%lu [label=\"Node %lu | {node_id | %lu} | {data | " GLIST_PRINTF_CODE "}\"]\n", i, i, node->id, node->data);
+    }
+
+    fprintf(fout, "\t}\n");
+    
+    for (size_t i = 0; i < list->pool.capacity; ++i) {
+        gList_Node *node = &list->pool.data[i].val;
+        if (node->id != 0 || node->next != 0) {
+            fprintf(fout, "\tnode%lu -> node%lu\n", i, node->next);
+            fprintf(fout, "\tnode%lu -> node%lu\n", node->next, i);
+        }
+    }
+
+    fprintf(fout, "}\n");
+    return gList_status_OK;
+}
+
 gList_status gList_dumpGraphViz(const gList *list, FILE *fout)
 {
-    ASSERT_LOG(gPtrValid(list), gList_status_BadStructPtr, stderr);
+    ASSERT_LOG(gPtrValid(list), gList_status_BadStructPtr,  stderr);
+    ASSERT_LOG(gPtrValid(fout), gList_status_BadDumpOutPtr, stderr);
 
     gList_Node *node = NULL;
     gList_status status = gList_status_OK;
