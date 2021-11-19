@@ -64,9 +64,8 @@ enable_testing()
 add_executable(glist-test glist.h glist-test.cpp)
 
 target_link_libraries(
+    glist-test
     gtest_main
 )
-
-
 
 include(GoogleTest)
