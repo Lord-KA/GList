@@ -11,10 +11,10 @@
 #include "gutils.h"
 
 
-/** 
+/**
  * @brief basic list node containing next and prev id and the data
  */
-struct gList_Node         
+struct gList_Node
 {
     GLIST_TYPE data;            /// Stored user-provided data
     size_t next;                /// Id of the next node in list
@@ -34,11 +34,11 @@ static const char LOG_DELIM[] = "=============================";    /// Delim li
 /**
  * @brief main linked list structure
  */
-struct gList 
+struct gList
 {
     size_t size;                /// current size of the list
     size_t zero;                /// id of the service zero node
-    gObjPool pool;              /// Object Pool for memory management
+    gObjPool *pool;              /// Object Pool for memory management
     FILE *logStream;            /// Log stream for centralized logging
 } typedef gList;
 
@@ -46,16 +46,17 @@ struct gList
 /**
  * @brief status codes for gList
  */
-enum gList_status 
+enum gList_status
 {
     gList_status_OK,
     gList_status_AllocErr,
-    gList_status_BadCapacity, 
+    gList_status_BadCapacity,
     gList_status_BadStructPtr,
     gList_status_BadId,
     gList_status_BadPos,
     gList_status_BadNodePtr,
     gList_status_BadDumpOutPtr,
+    gList_status_BadPool,
     gList_status_Cnt,
 };
 
@@ -72,6 +73,7 @@ static const char gList_statusMsg[gList_status_Cnt][MAX_MSG_LEN] = {
     "Bad position requested",
     "Bad node pointer provided",
     "Bad FILE pointer provided to graphViz dump",
+    "Bad objPool ptr provided",
 };
 
 
@@ -85,7 +87,7 @@ static const char gList_statusMsg[gList_status_Cnt][MAX_MSG_LEN] = {
 
 
 /**
- * @brief Local version of ASSERT_LOG macro 
+ * @brief Local version of ASSERT_LOG macro
  */
 #ifndef NLOGS
 #define GLIST_ASSERT_LOG(expr, errCode, logStream) ({                                   \
@@ -95,7 +97,7 @@ static const char gList_statusMsg[gList_status_Cnt][MAX_MSG_LEN] = {
     }                                                                                 \
 })
 #else
-#define GLIST_ASSERT_LOG(...) 
+#define GLIST_ASSERT_LOG(...)
 #endif
 
 
@@ -105,108 +107,77 @@ static const char gList_statusMsg[gList_status_Cnt][MAX_MSG_LEN] = {
  * @param newLogStream new log stream, could be `NULL`, then logs will be written to `stderr`
  * @return gList status code
  */
-gList_status gList_ctor(gList *list, FILE *newLogStream) 
+gList_status gList_ctor(gList *list, FILE *newLogStream, gObjPool *pool)
 {
-    if (!gPtrValid(list)) {                                          
-        FILE *out;                                                   
-        if (!gPtrValid(newLogStream))                                
-            out = stderr;                                            
-        else                                                         
-            out = newLogStream;                                      
+    if (!gPtrValid(list)) {
+        FILE *out;
+        if (!gPtrValid(newLogStream))
+            out = stderr;
+        else
+            out = newLogStream;
         fprintf(out, "ERROR: bad structure ptr provided to list ctor!\n");
-        return gList_status_BadStructPtr;                         
+        return gList_status_BadStructPtr;
     }
 
     if (!gPtrValid(newLogStream))
         list->logStream = stderr;
-    else 
+    else
         list->logStream = newLogStream;
 
     list->size = 0;
-    gObjPool_status status = gObjPool_ctor(&list->pool, -1, newLogStream);
-    CHECK_POOL_STATUS(status);
-    status = gObjPool_alloc(&list->pool, &list->zero);
-    CHECK_POOL_STATUS(status);
+    list->pool = pool;
+    GLIST_ASSERT_LOG(gPtrValid(pool), gList_status_BadPool, list->logStream);
+    CHECK_POOL_STATUS(gObjPool_alloc(list->pool, &list->zero));
     gList_Node *node;
-    status = gObjPool_get(&list->pool, list->zero, &node);
-    CHECK_POOL_STATUS(status);
+    CHECK_POOL_STATUS(gObjPool_get(list->pool, list->zero, &node));
     node->next = list->zero;
     node->prev = list->zero;
     node->id = list->zero;
     return gList_status_OK;
 }
 
+gList *gList_new(FILE *newLogStream)
+{
+    gList    *list = (gList*)calloc(1, sizeof(gList));
+    gObjPool *pool = (gObjPool*)calloc(1, sizeof(gObjPool));
+    if (gObjPool_ctor(pool, -1, newLogStream) != 0)
+        return NULL;
+
+    if (gList_ctor(list, newLogStream, pool) != 0) {
+        free(list);
+        return NULL;
+    }
+    return list;
+}
+
 
 /**
- * @brief gList destructor 
+ * @brief gList destructor
  * @param list pointer to structure to destruct
  * @return gList status code
  */
-gList_status gList_dtor(gList *list) 
+gList_status gList_dtor(gList *list)
 {
     GLIST_ASSERT_LOG(gPtrValid(list), gList_status_BadStructPtr, stderr);
-    list->size = -1; 
+    list->size = -1;
     gList_Node *node = NULL;
-    gObjPool_get(&list->pool, list->zero, &node);
+    gObjPool_get(list->pool, list->zero, &node);
     if (node != NULL) {
         node->next = -1;
         node->prev = -1;
     }
-    gObjPool_dtor(&list->pool);
     return gList_status_OK;
 }
 
 
-/**
- * @brief sorts objPool to correspond the actual order of elements in the list
- * @param list pointer to structure to sort
- * @return gList status code
- */
-gList_status gList_posSort(gList *list)
+gList *gList_delete(gList *list)
 {
-    GLIST_ASSERT_LOG(gPtrValid(list), gList_status_BadStructPtr, stderr);
-
-    gList_Node *node    = NULL;
-    gList_Node *newNode = NULL;
-    size_t newId = 0;
-    gObjPool newPool;
-    gObjPool_ctor(&newPool, list->pool.capacity, list->logStream);
-    size_t i = 0;
-    gList_status status = gList_status_OK;
-
-    status = (gList_status)gObjPool_get(&list->pool, list->zero, &node);
-    GLIST_ASSERT_LOG(status == gList_status_OK, status, list->logStream);
-    do {
-        status =(gList_status)gObjPool_alloc(&newPool, &newId);
-        GLIST_ASSERT_LOG(status == gList_status_OK, status, list->logStream);
-
-        status =(gList_status)gObjPool_get(&newPool, newId, &newNode);
-        GLIST_ASSERT_LOG(status == gList_status_OK, status, list->logStream);
-
-        newNode->id = i;
-        newNode->next = i + 1;
-        newNode->prev = i - 1;
-        newNode->data = node->data;
-        ++i;
-        
-        status =(gList_status)gObjPool_get(&list->pool, node->next, &node);
-        GLIST_ASSERT_LOG(status == gList_status_OK, status, list->logStream);
-    } while (node->id != list->zero);
-
-    gList_Node *zeroNode = NULL;
-    
-    status =(gList_status)gObjPool_get(&newPool, 0, &zeroNode);
-    GLIST_ASSERT_LOG(status == gList_status_OK, status, list->logStream);
-    
-    newNode->next = 0;
-    zeroNode->prev = newNode->id;
-
-    gObjPool_dtor(&list->pool);
-    list->pool = newPool;
-
-    return gList_status_OK;
+    if (gList_dtor(list) != 0 || gObjPool_dtor(list->pool) != 0)
+        return list;
+    free(list->pool);
+    free(list);
+    return NULL;
 }
-
 
 /**
  * @brief return the id of the next Node (could be zero Node, if list is empty or used on the last element)
@@ -215,14 +186,14 @@ gList_status gList_posSort(gList *list)
  * @param nextId pointer to id of the next Node, will be overriden
  * @return gList status code
  */
-gList_status gList_getNextId(const gList *list, const size_t id, size_t *nextId) 
+gList_status gList_getNextId(const gList *list, const size_t id, size_t *nextId)
 {
     GLIST_ASSERT_LOG(gPtrValid(list), gList_status_BadStructPtr, stderr);
 
     gList_Node *node = NULL;
-    gObjPool_status status = gObjPool_get(&list->pool, id, &node);
+    gObjPool_status status = gObjPool_get(list->pool, id, &node);
     GLIST_ASSERT_LOG(status == gList_status_OK, status, list->logStream);
-    
+
     *nextId = node->next;
 
     return gList_status_OK;
@@ -235,15 +206,15 @@ gList_status gList_getNextId(const gList *list, const size_t id, size_t *nextId)
  * @param nextNode pointer to pointer to the next Node, will be overriden
  * @return gList status code
  */
-gList_status gList_getNextNode(const gList *list, const size_t id, gList_Node **nextNode) 
+gList_status gList_getNextNode(const gList *list, const size_t id, gList_Node **nextNode)
 {
     GLIST_ASSERT_LOG(gPtrValid(list), gList_status_BadStructPtr, stderr);
 
     gList_Node *node = NULL;
-    gObjPool_status status = gObjPool_get(&list->pool, id, &node);
+    gObjPool_status status = gObjPool_get(list->pool, id, &node);
     GLIST_ASSERT_LOG(status == gList_status_OK, status, list->logStream);
-    
-    status = gObjPool_get(&list->pool, node->next, nextNode);
+
+    status = gObjPool_get(list->pool, node->next, nextNode);
     GLIST_ASSERT_LOG(status == gList_status_OK, status, list->logStream);
 
     return gList_status_OK;
@@ -257,7 +228,7 @@ gList_status gList_getNextNode(const gList *list, const size_t id, gList_Node **
  * @param node pointer to pointer to the desired Node, will be overriden
  * @return gList status code
  */
-gList_status gList_getNode(const gList *list, const size_t pos, gList_Node **node) 
+gList_status gList_getNode(const gList *list, const size_t pos, gList_Node **node)
 {
     GLIST_ASSERT_LOG(gPtrValid(list), gList_status_BadStructPtr, stderr);
     size_t curId = list->zero;
@@ -268,7 +239,7 @@ gList_status gList_getNode(const gList *list, const size_t pos, gList_Node **nod
             GLIST_ASSERT_LOG(status == gList_status_OK, gList_status_BadPos, list->logStream);
         GLIST_ASSERT_LOG(status == gList_status_OK, status, list->logStream);
     }
-    status = (gList_status)gObjPool_get(&list->pool, curId, node);
+    status = (gList_status)gObjPool_get(list->pool, curId, node);
     GLIST_ASSERT_LOG(status == gList_status_OK, status, list->logStream);
 
     return gList_status_OK;
@@ -282,7 +253,7 @@ gList_status gList_getNode(const gList *list, const size_t pos, gList_Node **nod
  * @param data pointer to pointer to the Data by desired position, will be overriden
  * @return gList status code
  */
-gList_status gList_getData(const gList *list, const size_t pos, GLIST_TYPE **data) 
+gList_status gList_getData(const gList *list, const size_t pos, GLIST_TYPE **data)
 {
     GLIST_ASSERT_LOG(gPtrValid(list), gList_status_BadStructPtr, stderr);
     gList_Node *node = NULL;
@@ -301,42 +272,42 @@ gList_status gList_getData(const gList *list, const size_t pos, GLIST_TYPE **dat
  * @param data data to put into the new node
  * @return gList status code
  */
-gList_status gList_insertByNode(gList *list, size_t nodeId, const GLIST_TYPE data)       
+gList_status gList_insertByNode(gList *list, size_t nodeId, const GLIST_TYPE data)
 {
     GLIST_ASSERT_LOG(gPtrValid(list), gList_status_BadStructPtr, stderr);
-    
+
     gList_Node *node = NULL;
-    gList_status status = (gList_status)gObjPool_get(&list->pool, nodeId, &node);
+    gList_status status = (gList_status)gObjPool_get(list->pool, nodeId, &node);
     GLIST_ASSERT_LOG(status == gList_status_OK, status, list->logStream);
 
     size_t nextNodeId = node->next;
     size_t prevNodeId = node->id;
 
     size_t newNodeId = 0;
-    status = (gList_status)gObjPool_alloc(&list->pool, &newNodeId);
+    status = (gList_status)gObjPool_alloc(list->pool, &newNodeId);
     GLIST_ASSERT_LOG(status == gList_status_OK, status, list->logStream);
-        
+
     gList_Node *nextNode = NULL;
-    status = (gList_status)gObjPool_get(&list->pool, nextNodeId, &nextNode);
+    status = (gList_status)gObjPool_get(list->pool, nextNodeId, &nextNode);
     GLIST_ASSERT_LOG(status == gList_status_OK, status, list->logStream);
- 
+
     gList_Node *newNode = NULL;
-    status = (gList_status)gObjPool_get(&list->pool, newNodeId, &newNode);
+    status = (gList_status)gObjPool_get(list->pool, newNodeId, &newNode);
     GLIST_ASSERT_LOG(status == gList_status_OK, status, list->logStream);
-    
-    status = (gList_status)gObjPool_get(&list->pool, prevNodeId, &node);
+
+    status = (gList_status)gObjPool_get(list->pool, prevNodeId, &node);
     GLIST_ASSERT_LOG(status == gList_status_OK, status, list->logStream);
 
     newNode->next = nextNodeId;
     newNode->prev = prevNodeId;
     newNode->id   = newNodeId;
     newNode->data = data;
-    
+
     node->next     = newNodeId;
     nextNode->prev = newNodeId;
 
     ++list->size;
-    
+
     return gList_status_OK;
 }
 
@@ -352,7 +323,7 @@ gList_status gList_insertByPos(gList *list, const size_t pos, GLIST_TYPE data)
 {
     GLIST_ASSERT_LOG(gPtrValid(list), gList_status_BadStructPtr, stderr);
     gList_status status = gList_status_OK;
-    
+
     gList_Node *node = NULL;
     status = gList_getNode(list, pos, &node);
     GLIST_ASSERT_LOG(status == gList_status_OK, status, list->logStream);
@@ -376,15 +347,15 @@ gList_status gList_popByNode(gList *list, size_t nodeId, GLIST_TYPE *data)
     GLIST_ASSERT_LOG(gPtrValid(list), gList_status_BadStructPtr, stderr);
 
     gList_Node *node = NULL;
-    gList_status status = (gList_status)gObjPool_get(&list->pool, nodeId, &node);
+    gList_status status = (gList_status)gObjPool_get(list->pool, nodeId, &node);
     GLIST_ASSERT_LOG(status == gList_status_OK, status, list->logStream);
 
     gList_Node *prevNode = NULL;
-    status = (gList_status)gObjPool_get(&list->pool, node->prev, &prevNode);
+    status = (gList_status)gObjPool_get(list->pool, node->prev, &prevNode);
     GLIST_ASSERT_LOG(status == gList_status_OK, status, list->logStream);
- 
+
     gList_Node *nextNode = NULL;
-    status = (gList_status)gObjPool_get(&list->pool, node->next, &nextNode);
+    status = (gList_status)gObjPool_get(list->pool, node->next, &nextNode);
     GLIST_ASSERT_LOG(status == gList_status_OK, status, list->logStream);
 
     prevNode->next = nextNode->id;
@@ -392,11 +363,11 @@ gList_status gList_popByNode(gList *list, size_t nodeId, GLIST_TYPE *data)
 
     node->next = -1;
     node->prev = -1;
-    
+
     if (data != NULL)
         *data = node->data;
 
-    status = (gList_status)gObjPool_free(&list->pool, node->id);
+    status = (gList_status)gObjPool_free(list->pool, node->id);
     GLIST_ASSERT_LOG(status == gList_status_OK, status, list->logStream);
 
     --list->size;
@@ -416,7 +387,7 @@ gList_status gList_popByPos(gList *list, const size_t pos, GLIST_TYPE *data)
 {
     GLIST_ASSERT_LOG(gPtrValid(list), gList_status_BadStructPtr, stderr);
     gList_status status = gList_status_OK;
-    
+
     gList_Node *node = NULL;
     status = gList_getNode(list, pos, &node);
     GLIST_ASSERT_LOG(status == gList_status_OK, status, list->logStream);
@@ -440,8 +411,8 @@ gList_status gList_dump(const gList *list)
     gList_Node *node = NULL;
     gList_status status = gList_status_OK;
     fprintf(list->logStream, "%s\ngList dump:\n%s\nsize = %lu\nzero_id = %lu\ndata:", LOG_DELIM, LOG_DELIM, list->size, list->zero);
-    
-    status = (gList_status)gObjPool_get(&list->pool, list->zero, &node);
+
+    status = (gList_status)gObjPool_get(list->pool, list->zero, &node);
     fprintf(list->logStream, "( id = %lu | data = " GLIST_PRINTF_CODE " | prev = %lu | next = %lu ) -> ", node->id, node->data, node->prev, node->next);
     GLIST_ASSERT_LOG(status == gList_status_OK, status, list->logStream);
     do {
@@ -450,7 +421,7 @@ gList_status gList_dump(const gList *list)
 
         fprintf(list->logStream, "( id = %lu | data = " GLIST_PRINTF_CODE " | prev = %lu | next = %lu ) -> ", node->id, node->data, node->prev, node->next);
     } while (node->id != list->zero);
-    
+
     fprintf(list->logStream, "\n%s\n", LOG_DELIM);
     return gList_status_OK;
 }
@@ -466,18 +437,18 @@ gList_status gList_dumpPoolGraphViz(const gList *list, FILE *fout)
 {
     GLIST_ASSERT_LOG(gPtrValid(list), gList_status_BadStructPtr,  stderr);
     GLIST_ASSERT_LOG(gPtrValid(fout), gList_status_BadDumpOutPtr, stderr);
-    
+
     fprintf(fout, "digraph dilist {\n\tnode [shape=record]\n\tsubgraph cluster {\n");
-    
-    for (size_t i = 0; i < list->pool.capacity; ++i) {
-        gList_Node *node = &list->pool.data[i].val;
+
+    for (size_t i = 0; i < list->pool->capacity; ++i) {
+        gList_Node *node = &list->pool->data[i].val;
         fprintf(fout, "\t\tnode%lu [label=\"Node %lu | {node_id | %lu} | {data | " GLIST_PRINTF_CODE "}\"]\n", i, i, node->id, node->data);
     }
 
     fprintf(fout, "\t}\n");
-    
-    for (size_t i = 0; i < list->pool.capacity; ++i) {
-        gList_Node *node = &list->pool.data[i].val;
+
+    for (size_t i = 0; i < list->pool->capacity; ++i) {
+        gList_Node *node = &list->pool->data[i].val;
         if (node->id != 0 || node->next != 0) {
             fprintf(fout, "\tnode%lu -> node%lu\n", i, node->next);
             fprintf(fout, "\tnode%lu -> node%lu\n", node->next, i);
@@ -502,8 +473,8 @@ gList_status gList_dumpGraphViz(const gList *list, FILE *fout)
     gList_Node *node = NULL;
     gList_status status = gList_status_OK;
     fprintf(fout, "digraph dilist {\n\tnode [shape=record]\n");
-    
-    status = (gList_status)gObjPool_get(&list->pool, list->zero, &node);
+
+    status = (gList_status)gObjPool_get(list->pool, list->zero, &node);
     fprintf(fout, "\tnode%lu [label=\"Node %lu | {size | %lu} | {data | " GLIST_PRINTF_CODE "}\"]\n", node->id, node->id, list->size, node->data);
     fprintf(fout, "\tnode%lu -> node%lu\n", node->id, node->next);
     fprintf(fout, "\tnode%lu -> node%lu\n", node->next, node->id);
@@ -516,7 +487,7 @@ gList_status gList_dumpGraphViz(const gList *list, FILE *fout)
         fprintf(fout, "\tnode%lu -> node%lu\n", node->id, node->next);
         fprintf(fout, "\tnode%lu -> node%lu\n", node->next, node->id);
     } while (node->id != list->zero);
-    
+
     fprintf(fout, "}\n");
     return gList_status_OK;
 }
