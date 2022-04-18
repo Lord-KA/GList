@@ -13,7 +13,7 @@ std::mt19937 rnd(179);
 
 TEST(manual, basic)
 {
-    gList *list = gList_new(NULL);
+    gList *list = gList_new(NULL, -1);
 
     gObjPool_status pool_s = gObjPool_status_BadStructPtr;
     gList_status list_s = (gList_status)pool_s;
@@ -47,7 +47,7 @@ finish:
 
 TEST(Auto, basic)
 {
-    gList *list = gList_new(NULL);
+    gList *list = gList_new(NULL, -1);
     std::vector<GLIST_TYPE> stdList = {};
 
     for (size_t i = 0; i < 30000; ++i) {

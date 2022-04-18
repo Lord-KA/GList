@@ -136,11 +136,11 @@ gList_status gList_ctor(gList *list, FILE *newLogStream, gObjPool *pool)
     return gList_status_OK;
 }
 
-gList *gList_new(FILE *newLogStream)
+gList *gList_new(FILE *newLogStream, size_t capacity)
 {
     gList    *list = (gList*)calloc(1, sizeof(gList));
     gObjPool *pool = (gObjPool*)calloc(1, sizeof(gObjPool));
-    if (gObjPool_ctor(pool, -1, newLogStream) != 0)
+    if (gObjPool_ctor(pool, capacity, newLogStream) != 0)
         return NULL;
 
     if (gList_ctor(list, newLogStream, pool) != 0) {
