@@ -89,18 +89,19 @@ static const char gList_statusMsg[gList_status_Cnt][MAX_MSG_LEN] = {
 /**
  * @brief Local version of ASSERT_LOG macro
  */
-#ifndef NLOGS
+#ifndef NDEBUG
 #define GLIST_ASSERT_LOG(expr, errCode, logStream) ({                                   \
     if (!(expr)) {                                                                 \
         fprintf((logStream),  "%s in %s!\n", gList_statusMsg[(errCode)], __func__); \
         return (gList_status)(errCode);                                              \
     }                                                                                 \
 })
+#define GLIST_ID_VAL(id) GLIST_ASSERT_LOG(gObjPool_idValid(list->pool, id), gList_status_BadId, list->logStream)
 #else
 #define GLIST_ASSERT_LOG(...)
+#define GLIST_ID_VAL(...)
 #endif
 
-#define GLIST_ID_VAL(id) GLIST_ASSERT_LOG(gObjPool_idValid(list->pool, id), gList_status_BadId, list->logStream)
 
 #define GLIST_NODE_BY_ID(id) ({                                     \
     GLIST_ID_VAL(id);                                                \
