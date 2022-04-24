@@ -90,12 +90,7 @@ static const char gList_statusMsg[gList_status_Cnt][MAX_MSG_LEN] = {
  * @brief Local version of ASSERT_LOG macro
  */
 #ifndef NDEBUG
-#define GLIST_ASSERT_LOG(expr, errCode, logStream) ({                                   \
-    if (!(expr)) {                                                                 \
-        fprintf((logStream),  "%s in %s!\n", gList_statusMsg[(errCode)], __func__); \
-        return (gList_status)(errCode);                                              \
-    }                                                                                 \
-})
+#define GLIST_ASSERT_LOG(expr, errCode, logStream) ASSERT_LOG(expr, errCode, gList_statusMsg[errCode], logStream)
 #define GLIST_ID_VAL(id) GLIST_ASSERT_LOG(gObjPool_idValid(list->pool, id), gList_status_BadId, list->logStream)
 #else
 #define GLIST_ASSERT_LOG(...)
@@ -103,9 +98,9 @@ static const char gList_statusMsg[gList_status_Cnt][MAX_MSG_LEN] = {
 #endif
 
 
-#define GLIST_NODE_BY_ID(id) ({                                     \
-    GLIST_ID_VAL(id);                                                \
-    &(list->pool->data[id].val);                                      \
+#define GLIST_NODE_BY_ID(macroId) ({                                     \
+    GLIST_ID_VAL(macroId);                                                \
+    gObjPool_ValById_UNSAFE(list->pool, macroId);                          \
 })
 
 
@@ -425,15 +420,15 @@ gList_status gList_dumpPoolGraphViz(const gList *list, FILE *fout)
 
     fprintf(fout, "digraph dilist {\n\tnode [shape=record]\n\tsubgraph cluster {\n");
 
-    for (size_t i = 0; i < list->pool->capacity; ++i) {
-        gList_Node *node = &list->pool->data[i].val;
+    for (size_t i = 0; i < list->pool->capacity - 1; ++i) {
+        gList_Node *node = gObjPool_ValById_UNSAFE(list->pool, i);
         fprintf(fout, "\t\tnode%lu [label=\"Node %lu | {node_id | %lu} | {data | " GLIST_PRINTF_CODE "}\"]\n", i, i, node->id, node->data);
     }
 
     fprintf(fout, "\t}\n");
 
-    for (size_t i = 0; i < list->pool->capacity; ++i) {
-        gList_Node *node = &list->pool->data[i].val;
+    for (size_t i = 0; i < list->pool->capacity - 1; ++i) {
+        gList_Node *node = gObjPool_ValById_UNSAFE(list->pool, i);
         if (node->id != 0 || node->next != 0) {
             fprintf(fout, "\tnode%lu -> node%lu\n", i, node->next);
             fprintf(fout, "\tnode%lu -> node%lu\n", node->next, i);
