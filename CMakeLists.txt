@@ -1,12 +1,9 @@
 cmake_minimum_required(VERSION 3.14)
 project(GList)
 
-set(CMAKE_CXX_COMPILER "/usr/bin/clang++" CACHE string "clang compiler" FORCE) #TODO check if clang is present when COVERAGE needed
-                
 
 set(CMAKE_CXX_STANDART 20)
 set(CMAKE_CXX_STANDART_REQUIRED ON)
-
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" CACHE STRING "Comment" FORCE)
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -D NDEBUG" CACHE STRING "Comment" FORCE)
@@ -45,14 +42,11 @@ endif()
 FetchContent_Declare(
   gobjpool
   GIT_REPOSITORY https://github.com/Lord-KA/gObjPool.git
-  GIT_TAG        release-1.0.0
 )
 if(NOT gobjpool_POPULATED)
   FetchContent_Populate(gobjpool)
   include_directories(${gobjpool_SOURCE_DIR})
 endif()
-
-# include_directories()
 
 set_target_properties(gtest PROPERTIES FOLDER extern)
 set_target_properties(gtest_main PROPERTIES FOLDER extern)
