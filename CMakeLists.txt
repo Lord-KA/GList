@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.14)
 project(GList)
 
-
 set(CMAKE_CXX_STANDART 20)
 set(CMAKE_CXX_STANDART_REQUIRED ON)
 
@@ -42,6 +41,7 @@ endif()
 FetchContent_Declare(
   gobjpool
   GIT_REPOSITORY https://github.com/Lord-KA/gObjPool.git
+  GIT_TAG        release-1.1.0
 )
 if(NOT gobjpool_POPULATED)
   FetchContent_Populate(gobjpool)
